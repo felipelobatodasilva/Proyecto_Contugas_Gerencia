@@ -1,0 +1,5 @@
+outs:
+- md5: cce1c22a76f593a200177b542e8f90d2
+  size: 69798074
+  hash: md5
+  path: df_con_anomalias.csv

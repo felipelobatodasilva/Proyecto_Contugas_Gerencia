@@ -1,0 +1,5 @@
+outs:
+- md5: 35b6af8826187adf6ee90bfa90831da0
+  size: 72427750
+  hash: md5
+  path: Contugas_limpia_escalada.csv
