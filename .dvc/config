@@ -1,0 +1,4 @@
+[core]
+    remote = contugas-remote
+['remote "contugas-remote"']
+    url = s3://contugas-dvc-storage
