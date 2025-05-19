@@ -1,0 +1,6 @@
+outs:
+- md5: ac6b4687a7497e000bef573570ddf234.dir
+  size: 23459936
+  nfiles: 3
+  hash: md5
+  path: Parquet_Refined_Files

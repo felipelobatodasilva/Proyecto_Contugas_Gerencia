@@ -1,0 +1,6 @@
+outs:
+- md5: f65630af084edf6552c9d78eea9aa2ec.dir
+  size: 1942
+  nfiles: 2
+  hash: md5
+  path: refined_models
