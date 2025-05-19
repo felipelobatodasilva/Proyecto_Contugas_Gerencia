@@ -1,0 +1,6 @@
+outs:
+- md5: 283c1d22259fdf383aa038f761276d77.dir
+  size: 42079165
+  nfiles: 1
+  hash: md5
+  path: insumo

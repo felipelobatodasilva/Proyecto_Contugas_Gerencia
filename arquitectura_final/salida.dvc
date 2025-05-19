@@ -1,0 +1,6 @@
+outs:
+- md5: 541a716d01a36da47cb2ef730723ad8b.dir
+  size: 141263412
+  nfiles: 2
+  hash: md5
+  path: salida
