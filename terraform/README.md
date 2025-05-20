@@ -67,6 +67,31 @@ Esto creará:
 
 ---
 
+## Ejecución y monitoreo de los Crawlers de Glue
+
+Después de crear los jobs de Glue y los recursos necesarios con Terraform (crawlers y athena), ejecute el script para actualizar y catalogar los metadatos de las tablas `trusted` y `refined`:
+
+```bash
+chmod +x run_crawlers.sh
+./run_crawlers.sh
+```
+
+El script iniciará los crawlers `contugas_trusted_crawler` y `contugas_refined_crawler`.
+
+Puede monitorear el progreso de los crawlers desde la Consola de AWS Glue:
+- Acceda al servicio Glue en la Consola de AWS
+- Haga clic en "Crawlers" en el menú lateral
+- Verifique el estado de los crawlers `contugas_trusted_crawler` y `contugas_refined_crawler`
+
+O, si prefiere, utilice el siguiente comando para consultar el estado desde la CLI:
+
+```bash
+aws glue get-crawler --name contugas_trusted_crawler
+aws glue get-crawler --name contugas_refined_crawler
+```
+
+---
+
 ## Observaciones Importantes
 
 - **Nunca ejecute los jobs Glue manualmente desde la consola mientras el pipeline esté en ejecución para evitar concurrencia.**
