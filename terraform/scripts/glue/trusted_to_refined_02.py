@@ -16,14 +16,14 @@ from awsglue.dynamicframe import DynamicFrame
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster       import KMeans
 
-# ─── Configurações ────────────────────────────────────────────────────────────
+# ─── Configuración ─────────────────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 TRUSTED_BUCKET = "contugas-trusted-data-dev"
 REFINED_BUCKET = "contugas-refined-data-dev"
 NUM_CLUSTERS   = 5
-MODEL_PREFIX   = "models"  # pasta em S3 para scaler.joblib e kmeans_model.joblib
+MODEL_PREFIX   = "models"  # carpeta en S3 para scaler.joblib y kmeans_model.joblib
 
 class RefinedPipeline:
     def __init__(self, glue_context):
@@ -47,7 +47,7 @@ class RefinedPipeline:
         return self
 
     def create_and_persist_sklearn_models(self):
-        # 1) Agrupa no Spark e passa para pandas
+        # 1) Agrupa no Spark e pasa para pandas
         summary = (
             self.data
                 .groupBy("cliente")
@@ -59,7 +59,7 @@ class RefinedPipeline:
         )
         summary_pd = summary.toPandas()
 
-        # 2) Treina scaler e KMeans em sklearn
+        # 2) Treina scaler e KMeans en sklearn
         feats = summary_pd[["presion_media","temperatura_media","volumen_media"]].values
         scaler = StandardScaler()
         feats_scaled = scaler.fit_transform(feats)
@@ -161,7 +161,7 @@ class RefinedPipeline:
             },
             format             = "parquet"
         )
-        logger.info("Dados refinados salvos em parquet particionado por data de processamento")
+        logger.info("Datos refinados guardados en Parquet particionado por fecha_procesamiento")
         return self
 
 def run_pipeline():
@@ -179,7 +179,7 @@ def run_pipeline():
     )
 
     job.commit()
-    logger.info("Pipeline completo executado com sucesso")
+    logger.info("Pipeline Glue finalizado con éxito")
 
 if __name__ == "__main__":
     run_pipeline()
