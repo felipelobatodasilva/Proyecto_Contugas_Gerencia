@@ -15,7 +15,7 @@ from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import f1_score, precision_score, recall_score
 
-# -------------------- Configurações --------------------
+# -------------------- Configuración --------------------
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ MODEL_PREFIX  = "models"
 NUM_CLUSTERS  = 5
 ESTADO_ALEATORIO = 42
 
-# -------------------- Treinamento e salvamento --------------------
+# -------------------- Entrenamiento y guardado --------------------
 def entrenar_y_guardar_modelos(df, features, n_clusters, s3_client):
     threshold_candidates = np.linspace(-1.0, 1.0, 201)
     resultados = []
@@ -71,7 +71,7 @@ def entrenar_y_guardar_modelos(df, features, n_clusters, s3_client):
             'threshold': best_thr
         }
 
-        # Salvar direto no S3 com BytesIO
+        # Guardar directamente en S3 con BytesIO
         buffer = io.BytesIO()
         joblib.dump(paquete_modelo, buffer)
         buffer.seek(0)

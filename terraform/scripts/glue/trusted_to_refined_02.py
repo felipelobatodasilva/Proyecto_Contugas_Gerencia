@@ -47,7 +47,7 @@ class RefinedPipeline:
         return self
 
     def create_and_persist_sklearn_models(self):
-        # 1) Agrupa no Spark e pasa para pandas
+        # 1) Agrupa en Spark y pasa a pandas
         summary = (
             self.data
                 .groupBy("cliente")
@@ -59,7 +59,7 @@ class RefinedPipeline:
         )
         summary_pd = summary.toPandas()
 
-        # 2) Treina scaler e KMeans en sklearn
+        # 2) Entrena scaler y KMeans en sklearn
         feats = summary_pd[["presion_media","temperatura_media","volumen_media"]].values
         scaler = StandardScaler()
         feats_scaled = scaler.fit_transform(feats)
@@ -73,7 +73,7 @@ class RefinedPipeline:
         summary_pd["cluster"] = labels
         logger.info("Sklearn: scaler e KMeans treinados com sucesso")
 
-        # 3) Salva modelos em /tmp e envia para S3
+        # 3) Guarda modelos en /tmp y los sube a S3
         os.makedirs("/tmp/models", exist_ok=True)
         joblib.dump(scaler, "/tmp/models/scaler.joblib")
         joblib.dump(kmeans, "/tmp/models/kmeans_model.joblib")
@@ -86,7 +86,7 @@ class RefinedPipeline:
                        f"{MODEL_PREFIX}/kmeans_model.joblib")
         logger.info(f"Modelos salvos em s3://{REFINED_BUCKET}/{MODEL_PREFIX}/")
 
-        # 4) Volta para Spark e faz join dos clusters
+        # 4) Vuelve a Spark y hace join de los clusters
         spark_summary = self.spark.createDataFrame(
             summary_pd[["cliente","cluster"]]
         )
@@ -95,7 +95,7 @@ class RefinedPipeline:
         return self
 
     def calculate_anomaly_proxies(self):
-        # 1) calcula P10/P90 por cluster
+        # 1) Calcula P10/P90 por cluster
         cluster_stats = (
             self.data
                 .groupBy("cluster")
@@ -109,10 +109,10 @@ class RefinedPipeline:
                 )
         )
 
-        # 2) faz join das estatísticas com a base original
+        # 2) Hace join de las estadísticas con la base original
         df = self.data.join(cluster_stats, on="cluster", how="inner")
 
-        # 3) marca anomalias por feature
+        # 3) Marca anomalías por feature
         df = (
             df
                 .withColumn("anomalia_presion",
@@ -126,7 +126,7 @@ class RefinedPipeline:
                                    (F.col("volumen") > F.col("p90_volumen")), 1).otherwise(0))
         )
 
-        # 4) cria coluna única de anomalia proxy
+        # 4) Crea columna única de anomalía proxy
         df = df.withColumn(
             "Anomalia_Proxy_Cluster",
             F.greatest("anomalia_presion",
@@ -134,7 +134,7 @@ class RefinedPipeline:
                        "anomalia_volumen")
         )
 
-        # 5) remove colunas auxiliares
+        # 5) Elimina columnas auxiliares
         drops = [
             "p10_presion","p90_presion",
             "p10_temperatura","p90_temperatura",
@@ -146,7 +146,7 @@ class RefinedPipeline:
         return self
 
     def save_refined_data(self):
-        # gera coluna de data e grava particionado
+        # Genera columna de fecha y guarda particionado
         self.data = self.data.withColumn(
             "fecha_procesamiento",
             F.date_format(F.current_timestamp(), "yyyy-MM-dd")

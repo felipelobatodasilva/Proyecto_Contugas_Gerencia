@@ -8,13 +8,13 @@ from pydantic import BaseModel
 
 app = FastAPI()
 
-# ------------------ Configurações ------------------
+# ------------------ Configuración ------------------
 BUCKET_NAME = "contugas-models-dev"
 MODELS_PREFIX = "models"
 LOCAL_MODELS_PATH = "/tmp/modelos"
 os.makedirs(LOCAL_MODELS_PATH, exist_ok=True)
 
-# ------------------ S3 client ------------------
+# ------------------ Cliente S3 ------------------
 s3 = boto3.client("s3", region_name="us-east-1")
 
 def baixar_modelo_s3(s3_key, local_path):
@@ -24,7 +24,7 @@ def baixar_modelo_s3(s3_key, local_path):
     else:
         print(f"✔️ {s3_key} já existe localmente.")
 
-# ------------------ Baixar scaler e kmeans ------------------
+# ------------------ Descargar scaler y kmeans ------------------
 scaler_path = os.path.join(LOCAL_MODELS_PATH, "scaler.joblib")
 kmeans_path = os.path.join(LOCAL_MODELS_PATH, "kmeans_model.joblib")
 
@@ -35,7 +35,7 @@ scaler = joblib.load(scaler_path)
 kmeans = joblib.load(kmeans_path)
 n_clusters = kmeans.n_clusters
 
-# ------------------ Baixar modelos por cluster ------------------
+# ------------------ Descargar modelos por cluster ------------------
 modelos_por_cluster = {}
 for k in range(n_clusters):
     s3_key = f"{MODELS_PREFIX}/modelo_cluster_{k}_prod.joblib"
@@ -44,7 +44,7 @@ for k in range(n_clusters):
         baixar_modelo_s3(s3_key, local_path)
         modelos_por_cluster[k] = joblib.load(local_path)
     except Exception as e:
-        print(f"⚠️ Erro ao carregar modelo do cluster {k}: {e}")
+        print(f"⚠️ Erro ao carregar modelo del cluster {k}: {e}")
 
 # ------------------ Endpoint ------------------
 class InputData(BaseModel):
@@ -55,15 +55,15 @@ class InputData(BaseModel):
 @app.post("/predict")
 async def predict(data: InputData):
     df = pd.DataFrame([data.dict()])
-    # Prever cluster
+    # Predecir cluster
     X_input = scaler.transform(df[["presion", "temperatura", "volumen"]])
     cluster = int(kmeans.predict(X_input)[0])
 
     modelo = modelos_por_cluster.get(cluster)
     if not modelo:
-        return {"erro": f"Modelo do cluster {cluster} não encontrado"}
+        return {"erro": f"Modelo del cluster {cluster} não encontrado"}
 
-    # Aplicar modelo de anomalia
+    # Aplicar modelo de anomalía
     X_model = modelo["scaler"].transform(df[modelo["features"]])
     score = modelo["model"].decision_function(X_model)[0]
     pred = int(score < modelo["threshold"])

@@ -15,7 +15,7 @@ from awsglue.dynamicframe import DynamicFrame
 from pyspark.sql import functions as F
 from pyspark.sql.window import Window
 
-# --- Configuração do logging padrão do Python ---
+# --- Configuración del logging estándar de Python ---
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)          # <--- usa logging.getLogger
 

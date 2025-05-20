@@ -51,7 +51,9 @@ resource "aws_iam_role_policy" "s3_policy" {
           aws_s3_bucket.scripts.arn,
           "${aws_s3_bucket.scripts.arn}/*",
           aws_s3_bucket.refined.arn,
-          "${aws_s3_bucket.refined.arn}/*"
+          "${aws_s3_bucket.refined.arn}/*",
+          aws_s3_bucket.models.arn,
+          "${aws_s3_bucket.models.arn}/*"
         ]
       },
       {
@@ -112,6 +114,38 @@ resource "aws_glue_job" "trusted_to_refined" {
 
   command {
     script_location = "s3://${aws_s3_bucket.scripts.id}/glue/trusted_to_refined_02.py"
+    python_version  = "3"
+  }
+
+  default_arguments = {
+    "--enable-continuous-cloudwatch-log" = "true"
+    "--enable-metrics"                   = "true"
+    "--job-language"                     = "python"
+    "--TempDir"                          = "s3://${aws_s3_bucket.scripts.id}/temporary/"
+    "--additional-python-modules"        = "scikit-learn==1.0.2,numpy==1.21.6,pandas==1.3.5"
+  }
+
+  max_capacity = 2
+  max_retries  = 0
+  timeout      = 60
+
+  execution_property {
+    max_concurrent_runs = 1
+  }
+
+  glue_version      = "4.0"
+}
+
+resource "aws_glue_job" "refined_to_models" {
+  name     = "contugas_refined_to_models"
+  role_arn = aws_iam_role.glue_role.arn
+  depends_on = [
+    aws_s3_object.refined_to_models_script,
+    aws_glue_job.trusted_to_refined
+  ]
+
+  command {
+    script_location = "s3://${aws_s3_bucket.scripts.id}/glue/refined_to_models_03.py"
     python_version  = "3"
   }
 

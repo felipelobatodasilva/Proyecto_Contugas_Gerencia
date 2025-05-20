@@ -16,6 +16,57 @@ Siga siempre este orden para garantizar el aprovisionamiento correcto y las depe
 
 ---
 
+## Ejecución de los Scripts Bash: Orden y Propósito
+
+En la carpeta `terraform/` existen scripts `.sh` que automatizan la ejecución de los jobs Glue y los crawlers en AWS.  
+**Es fundamental seguir el orden correcto para garantizar la integridad y consistencia de los datos en el Data Lake.**
+
+### Orden recomendado de ejecución:
+
+1. **run_raw_to_trusted.sh**
+   - **Propósito:** Ejecuta el job Glue que transforma los datos de la capa raw a trusted.
+   - **Uso:**
+     ```bash
+     bash run_raw_to_trusted.sh
+     ```
+   - **Nota:** Espere a que el job termine exitosamente antes de continuar.
+
+2. **run_trusted_to_refined.sh**
+   - **Propósito:** Ejecuta el job Glue que transforma los datos de la capa trusted a refined.
+   - **Uso:**
+     ```bash
+     bash run_trusted_to_refined.sh
+     ```
+   - **Nota:** Solo ejecute este script después de que el job anterior haya finalizado correctamente.
+
+3. **run_refined_to_models.sh**
+   - **Propósito:** Ejecuta el job Glue que toma los datos refinados y genera los modelos, subiéndolos al bucket S3 correspondiente.
+   - **Uso:**
+     ```bash
+     bash run_refined_to_models.sh
+     ```
+   - **Nota:** Este script solo debe ejecutarse después de que el job de trusted a refined haya finalizado correctamente.
+
+4. **run_crawlers.sh**
+   - **Propósito:** Ejecuta los crawlers de Glue para catalogar los datos en las capas trusted y refined.
+   - **Uso:**
+     ```bash
+     bash run_crawlers.sh
+     ```
+   - **Nota:** Este script solo debe ejecutarse después de que **todos los jobs Glue anteriores** hayan finalizado correctamente (raw_to_trusted, trusted_to_refined y refined_to_models). Si ejecutas los crawlers antes, la catalogación puede quedar incompleta o inconsistente.
+
+---
+
+> **Importante:**  
+> Antes de ejecutar cualquier script, asegúrate de tener configuradas las credenciales AWS y los permisos necesarios.  
+> **Nunca ejecutes los scripts en paralelo.** Espera siempre la finalización de cada etapa antes de continuar con la siguiente.
+
+---
+
+**Después de ejecutar los scripts en el orden indicado, sigue con la sección 'Ejecución y monitoreo de los Crawlers de Glue' para aprender cómo monitorear el progreso y validar la catalogación de los datos.**
+
+---
+
 ## 1. Aprovisionar solo los Jobs Glue
 
 Comente temporalmente todos los demás archivos `.tf` (como `03-glue_catalog.tf`, `04-athena.tf`, etc.), dejando solo activo el `02-glue.tf` (y los anteriores).
@@ -109,11 +160,15 @@ cd terraform
 terraform init
 terraform apply -auto-approve
 
-# 2. Ejecutar jobs Glue manualmente
+# 2. Ejecutar jobs Glue manualmente (en orden)
 bash run_raw_to_trusted.sh
 bash run_trusted_to_refined.sh
+bash run_refined_to_models.sh
 
-# 3. Descomentar 03-glue_catalog.tf y 04-athena.tf, luego:
+# 3. Ejecutar los crawlers (solo después de los jobs Glue)
+bash run_crawlers.sh
+
+# 4. Descomentar 03-glue_catalog.tf y 04-athena.tf, luego:
 terraform apply -auto-approve
 ```
 
@@ -182,3 +237,61 @@ A continuación se describe cada archivo `.tf` y los recursos principales defini
 Cada archivo y recurso está diseñado para que el flujo de datos y la infraestructura sigan las mejores prácticas de arquitectura en AWS, garantizando seguridad, trazabilidad y facilidad de operación.
 
 > **Importante:** Para garantizar la orden correcta de ejecución y evitar problemas de concurrencia, mantenga activos solo los archivos `00-backend.tf`, `01-s3.tf` y `02-glue.tf` en las etapas iniciales. Los archivos `03-glue_catalog.tf` y `04-athena.tf` deben ser temporariamente desactivados (puede renomear para `.tf_` o comentar todo el contenido). Solo después de la ejecución manual de los jobs Glue, reactivé esos archivos (vuelva a extender para `.tf` o descomente) y ejecute nuevamente el Terraform.
+
+## Instancia EC2 y Acceso SSH
+
+Este proyecto incluye una instancia EC2 configurada via Terraform para hospedar la aplicación FastAPI. A continuación se detallan las instrucciones para gestionar y acceder a la instancia.
+
+### Configuración de la Instancia
+La instancia EC2 está configurada con:
+- Ubuntu Server 24.04 LTS
+- Tipo de instancia: t3.micro
+- Grupo de seguridad configurado para permitir:
+  - SSH (puerto 22) solo desde la IP del administrador
+  - Tráfico de la aplicación (puerto definido en `var.app_port`) desde cualquier origen
+
+### Gestión de la Instancia via Terraform
+1. Para crear la instancia:
+   ```bash
+   cd terraform
+   terraform init
+   terraform apply
+   ```
+
+2. Para destruir la instancia:
+   ```bash
+   cd terraform
+   terraform destroy
+   ```
+
+### Acceso SSH a la Instancia
+1. **Generar par de claves SSH** (si aún no existe):
+   ```bash
+   mkdir -p terraform/ssh
+   ssh-keygen -t rsa -b 4096 -f terraform/ssh/manual-ec2-key -N ""
+   ```
+
+2. **Configurar permisos de la clave privada**:
+   ```bash
+   chmod 600 terraform/ssh/manual-ec2-key
+   ```
+
+3. **Conectar a la instancia**:
+   ```bash
+   ssh -i terraform/ssh/manual-ec2-key ubuntu@<IP_PUBLICO>
+   ```
+   La IP pública de la instancia se muestra en el output de Terraform después de `terraform apply`.
+
+### Configuración Inicial de la Instancia
+Después de acceder a la instancia, puede instalar las dependencias necesarias:
+```bash
+sudo apt-get update
+sudo apt-get install -y python3-pip git
+pip3 install fastapi uvicorn joblib pandas scikit-learn
+```
+
+### Notas Importantes
+- Mantenga su clave privada SSH (`manual-ec2-key`) segura y nunca la comparta
+- La IP pública de la instancia puede cambiar si la instancia se reinicia
+- Para mantener la IP pública fija, considere usar un Elastic IP
+- La instancia está configurada para permitir acceso SSH solo desde la IP del administrador definida en `var.admin_ipv4`
