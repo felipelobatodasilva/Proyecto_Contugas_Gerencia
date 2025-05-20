@@ -1,18 +1,12 @@
 # Database no Glue Catalog
-resource "null_resource" "wait_for_jobs" {
-  depends_on = [null_resource.run_glue_jobs]
-}
-
 resource "aws_glue_catalog_database" "trusted" {
   name        = "contugas_trusted"
   description = "Database para dados processados da Contugas na camada trusted"
-  depends_on = [null_resource.wait_for_jobs]
 }
 
 resource "aws_glue_catalog_database" "refined" {
   name        = "contugas_refined"
   description = "Database para dados refinados da Contugas"
-  depends_on = [null_resource.wait_for_jobs]
 }
 
 # Tabela para os dados processados
@@ -21,7 +15,6 @@ resource "aws_glue_catalog_table" "dados_processados" {
   database_name = aws_glue_catalog_database.trusted.name
   description   = "Dados processados da Contugas"
   table_type    = "EXTERNAL_TABLE"
-  depends_on = [null_resource.wait_for_jobs]
 
   parameters = {
     "classification"  = "parquet"
@@ -98,8 +91,6 @@ resource "aws_glue_crawler" "trusted_crawler" {
   database_name = aws_glue_catalog_database.trusted.name
   name          = "contugas_trusted_crawler"
   role          = aws_iam_role.glue_role.arn
-  depends_on = [null_resource.wait_for_jobs]
-
   s3_target {
     path = "s3://${aws_s3_bucket.trusted.id}/dato_procesado"
   }
@@ -122,7 +113,6 @@ resource "aws_glue_crawler" "refined_crawler" {
   database_name = aws_glue_catalog_database.refined.name
   name          = "contugas_refined_crawler"
   role          = aws_iam_role.glue_role.arn
-  depends_on = [null_resource.wait_for_jobs]
 
   s3_target {
     path = "s3://${aws_s3_bucket.refined.id}/dato_refinado/"
@@ -140,44 +130,3 @@ resource "aws_glue_crawler" "refined_crawler" {
     }
   })
 }
-
-# Recurso para executar os crawlers em sequência
-resource "null_resource" "run_crawlers" {
-  depends_on = [
-    aws_glue_crawler.trusted_crawler,
-    aws_glue_crawler.refined_crawler,
-    null_resource.wait_for_jobs
-  ]
-
-  provisioner "local-exec" {
-    command = <<-EOT
-      echo "Iniciando crawler trusted..."
-      aws glue start-crawler --name contugas_trusted_crawler
-
-      echo "Aguardando o término do crawler trusted..."
-      for i in {1..30}; do
-        STATUS=$(aws glue get-crawler --name contugas_trusted_crawler --query 'Crawler.State' --output text)
-        if [ "$STATUS" = "READY" ]; then
-          echo "Crawler trusted terminou!"
-          break
-        fi
-        echo "Status atual do crawler trusted: $STATUS. Aguardando 10 segundos..."
-        sleep 10
-      done
-
-      echo "Iniciando crawler refined..."
-      aws glue start-crawler --name contugas_refined_crawler
-
-      echo "Aguardando o término do crawler refined..."
-      for i in {1..30}; do
-        STATUS=$(aws glue get-crawler --name contugas_refined_crawler --query 'Crawler.State' --output text)
-        if [ "$STATUS" = "READY" ]; then
-          echo "Crawler refined terminou!"
-          break
-        fi
-        echo "Status atual do crawler refined: $STATUS. Aguardando 10 segundos..."
-        sleep 10
-      done
-    EOT
-  }
-} 
