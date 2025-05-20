@@ -19,6 +19,12 @@ resource "aws_s3_bucket" "refined" {
   force_destroy = true 
 }
 
+# Bucket para modelos
+resource "aws_s3_bucket" "models" {
+  bucket = "contugas-models-dev"
+  force_destroy = true
+}
+
 # Bucket para resultados do Athena
 resource "aws_s3_bucket" "athena_results" {
   bucket = "contugas-athena-results-dev"
@@ -35,6 +41,14 @@ resource "aws_s3_bucket_versioning" "raw" {
 
 resource "aws_s3_bucket_versioning" "trusted" {
   bucket = aws_s3_bucket.trusted.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+# Versionamento para o bucket de modelos
+resource "aws_s3_bucket_versioning" "models" {
+  bucket = aws_s3_bucket.models.id
   versioning_configuration {
     status = "Enabled"
   }
@@ -94,5 +108,12 @@ resource "aws_s3_object" "scripts_folder" {
 resource "aws_s3_object" "athena_results_folder" {
   bucket = aws_s3_bucket.athena_results.id
   key    = "athena-results/"
+  source = "/dev/null"
+}
+
+# Criação da estrutura de diretórios para modelos
+resource "aws_s3_object" "models_folder" {
+  bucket = aws_s3_bucket.models.id
+  key    = "models/"
   source = "/dev/null"
 } 
