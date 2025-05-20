@@ -5,9 +5,9 @@ import boto3
 import joblib
 import pandas as pd
 
-from pyspark.sql import SparkSession, functions as F, Window
-from pyspark.sql.types import *
-from pyspark.sql.functions import pandas_udf, PandasUDFType, col
+from pyspark.sql import SparkSession, functions as F
+from pyspark.sql.types import IntegerType
+from pyspark.sql.functions import udf
 from awsglue.context     import GlueContext
 from awsglue.job         import Job
 from awsglue.utils       import getResolvedOptions
@@ -16,128 +16,143 @@ from awsglue.dynamicframe import DynamicFrame
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster       import KMeans
 
-# ─── Configuração ─────────────────────────────────────────────────────────────
+# ─── Configurações ────────────────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 TRUSTED_BUCKET = "contugas-trusted-data-dev"
 REFINED_BUCKET = "contugas-refined-data-dev"
 NUM_CLUSTERS   = 5
-MODEL_PREFIX   = "models"
+MODEL_PREFIX   = "models"  # pasta em S3 para scaler.joblib e kmeans_model.joblib
 
 class RefinedPipeline:
     def __init__(self, glue_context):
-        self.glue  = glue_context
-        self.spark = glue_context.spark_session
-        self.data  = None
+        self.glue_context = glue_context
+        self.spark        = glue_context.spark_session
+        self.data         = None
 
-    def load_and_enrich(self):
-        # 1) Lê Parquet "trusted"
-        dyf = self.glue.create_dynamic_frame.from_options(
-            "s3", {"paths":[f"s3://{TRUSTED_BUCKET}/dato_procesado"]}, "parquet"
+    def load_latest_data(self):
+        dyf = self.glue_context.create_dynamic_frame.from_options(
+            "s3",
+            {"paths": [f"s3://{TRUSTED_BUCKET}/dato_procesado"]},
+            "parquet"
         )
-        df = dyf.toDF().withColumn("fecha", F.col("fecha").cast("timestamp"))
-
-        # extrai mes/ano e marca feriado se quiser, mas NÃO usamos presion_suavizada
-        df = df \
-            .withColumn("mes", F.month("fecha")) \
-            .withColumn("ano", F.year("fecha")) 
-
-        # remove nulos nas chaves brutas
-        df = df.dropna(subset=["cliente","presion","temperatura","volumen"])
-
+        df = dyf.toDF() \
+            .withColumn("presion",     F.col("presion").cast("double")) \
+            .withColumn("temperatura", F.col("temperatura").cast("double")) \
+            .withColumn("volumen",     F.col("volumen").cast("double"))
+        df = df.dropna(subset=["cliente", "presion", "temperatura", "volumen"])
+        logger.info(f"Dados carregados: {df.count()} registros válidos")
         self.data = df
         return self
 
-    def global_anomaly(self):
-        # quantis globais exatos em raw
-        cols = ["presion","temperatura","volumen"]
-        quants = self.data.stat.approxQuantile(cols, [0.1, 0.9], 0.0)
-        th = {
-            "p10_presion":     quants[0][0], "p90_presion":     quants[0][1],
-            "p10_temperatura": quants[1][0], "p90_temperatura": quants[1][1],
-            "p10_volumen":     quants[2][0], "p90_volumen":     quants[2][1],
-        }
+    def create_and_persist_sklearn_models(self):
+        # 1) Agrupa no Spark e passa para pandas
+        summary = (
+            self.data
+                .groupBy("cliente")
+                .agg(
+                    F.mean("presion").alias("presion_media"),
+                    F.mean("temperatura").alias("temperatura_media"),
+                    F.mean("volumen").alias("volumen_media")
+                )
+        )
+        summary_pd = summary.toPandas()
 
-        df = self.data
-        df = df \
-            .withColumn("anomalia_bin",
-                F.when(
-                    (col("presion")     < th["p10_presion"])     |
-                    (col("presion")     > th["p90_presion"])     |
-                    (col("temperatura") < th["p10_temperatura"]) |
-                    (col("temperatura") > th["p90_temperatura"]) |
-                    (col("volumen")     < th["p10_volumen"])     |
-                    (col("volumen")     > th["p90_volumen"])
-                , 1).otherwise(0)
-            ) \
-            .withColumn("anomalia",
-                F.when(col("anomalia_bin")==1, "Anomalia").otherwise("Normal")
-            )
-
-        self.data = df
-        return self
-
-    def train_and_assign_clusters(self):
-        # agrupa pelas médias brutas
-        summary = self.data.groupBy("cliente") \
-            .agg(
-                F.mean("presion").alias("presion_med"),
-                F.mean("temperatura").alias("temp_med"),
-                F.mean("volumen").alias("vol_med")
-            )
-        pdf = summary.toPandas()
-        X = pdf[["presion_med","temp_med","vol_med"]].values
-
-        # treina scaler e KMeans em sklearn
+        # 2) Treina scaler e KMeans em sklearn
+        feats = summary_pd[["presion_media","temperatura_media","volumen_media"]].values
         scaler = StandardScaler()
-        Xs     = scaler.fit_transform(X)
-        km     = KMeans(n_clusters=NUM_CLUSTERS, random_state=42, n_init=10)
-        pdf["cluster"] = km.fit_predict(Xs)
+        feats_scaled = scaler.fit_transform(feats)
+        kmeans = KMeans(
+            n_clusters   = NUM_CLUSTERS,
+            random_state = 42,
+            n_init       = 10,
+            init         = "k-means++"
+        )
+        labels = kmeans.fit_predict(feats_scaled)
+        summary_pd["cluster"] = labels
+        logger.info("Sklearn: scaler e KMeans treinados com sucesso")
 
-        # persiste artefatos
+        # 3) Salva modelos em /tmp e envia para S3
         os.makedirs("/tmp/models", exist_ok=True)
         joblib.dump(scaler, "/tmp/models/scaler.joblib")
-        joblib.dump(km,     "/tmp/models/kmeans_model.joblib")
+        joblib.dump(kmeans, "/tmp/models/kmeans_model.joblib")
         s3 = boto3.client("s3")
         s3.upload_file("/tmp/models/scaler.joblib",
-                       REFINED_BUCKET, f"{MODEL_PREFIX}/scaler.joblib")
+                       REFINED_BUCKET,
+                       f"{MODEL_PREFIX}/scaler.joblib")
         s3.upload_file("/tmp/models/kmeans_model.joblib",
-                       REFINED_BUCKET, f"{MODEL_PREFIX}/kmeans_model.joblib")
+                       REFINED_BUCKET,
+                       f"{MODEL_PREFIX}/kmeans_model.joblib")
+        logger.info(f"Modelos salvos em s3://{REFINED_BUCKET}/{MODEL_PREFIX}/")
 
-        # remete clusters de volta ao Spark
-        spark_sum = self.spark.createDataFrame(pdf[["cliente","cluster"]])
-        self.data = self.data.join(spark_sum, on="cliente", how="inner")
-        return self
-
-    def proxy_anomaly(self):
-        # schema de saída, adicionando só anomalia_proxy_cluster
-        out_schema = StructType(self.data.schema.fields + [
-            StructField("anomalia_proxy_cluster", IntegerType(), False)
-        ])
-
-        @pandas_udf(out_schema, PandasUDFType.GROUPED_MAP)
-        def flag_proxy(pdf: pd.DataFrame) -> pd.DataFrame:
-            # loop EXATAMENTE como no script pandas, sobre as colunas brutas
-            for feat in ["presion","temperatura","volumen"]:
-                p10 = pdf[feat].quantile(0.1)
-                p90 = pdf[feat].quantile(0.9)
-                pdf[f"a_{feat}"] = ((pdf[feat] < p10) | (pdf[feat] > p90)).astype(int)
-            pdf["anomalia_proxy_cluster"] = pdf[
-                [f"a_{f}" for f in ["presion","temperatura","volumen"]]
-            ].max(axis=1)
-            return pdf.drop(columns=[f"a_{f}" for f in ["presion","temperatura","volumen"]])
-
-        self.data = self.data.groupby("cluster").apply(flag_proxy)
-        return self
-
-    def save(self):
-        # grava particionado em Parquet, idêntico ao CSV original
-        out = self.data.withColumn(
-            "fecha_procesamiento", F.date_format(F.current_timestamp(),"yyyy-MM-dd")
+        # 4) Volta para Spark e faz join dos clusters
+        spark_summary = self.spark.createDataFrame(
+            summary_pd[["cliente","cluster"]]
         )
-        dyf = DynamicFrame.fromDF(out, self.glue, "refined")
-        self.glue.write_dynamic_frame.from_options(
+        self.data = self.data.join(spark_summary, on="cliente", how="inner")
+        logger.info(f"Clusters atribuídos (total: {self.data.count()})")
+        return self
+
+    def calculate_anomaly_proxies(self):
+        # 1) calcula P10/P90 por cluster
+        cluster_stats = (
+            self.data
+                .groupBy("cluster")
+                .agg(
+                    F.expr("percentile_approx(presion,   0.1, 10000)").alias("p10_presion"),
+                    F.expr("percentile_approx(presion,   0.9, 10000)").alias("p90_presion"),
+                    F.expr("percentile_approx(temperatura,0.1,10000)").alias("p10_temperatura"),
+                    F.expr("percentile_approx(temperatura,0.9,10000)").alias("p90_temperatura"),
+                    F.expr("percentile_approx(volumen,    0.1,10000)").alias("p10_volumen"),
+                    F.expr("percentile_approx(volumen,    0.9,10000)").alias("p90_volumen")
+                )
+        )
+
+        # 2) faz join das estatísticas com a base original
+        df = self.data.join(cluster_stats, on="cluster", how="inner")
+
+        # 3) marca anomalias por feature
+        df = (
+            df
+                .withColumn("anomalia_presion",
+                            F.when((F.col("presion") < F.col("p10_presion")) |
+                                   (F.col("presion") > F.col("p90_presion")), 1).otherwise(0))
+                .withColumn("anomalia_temperatura",
+                            F.when((F.col("temperatura") < F.col("p10_temperatura")) |
+                                   (F.col("temperatura") > F.col("p90_temperatura")), 1).otherwise(0))
+                .withColumn("anomalia_volumen",
+                            F.when((F.col("volumen") < F.col("p10_volumen")) |
+                                   (F.col("volumen") > F.col("p90_volumen")), 1).otherwise(0))
+        )
+
+        # 4) cria coluna única de anomalia proxy
+        df = df.withColumn(
+            "Anomalia_Proxy_Cluster",
+            F.greatest("anomalia_presion",
+                       "anomalia_temperatura",
+                       "anomalia_volumen")
+        )
+
+        # 5) remove colunas auxiliares
+        drops = [
+            "p10_presion","p90_presion",
+            "p10_temperatura","p90_temperatura",
+            "p10_volumen","p90_volumen",
+            "anomalia_presion","anomalia_temperatura","anomalia_volumen"
+        ]
+        self.data = df.drop(*drops)
+        logger.info("Proxies de anomalia calculados com sucesso")
+        return self
+
+    def save_refined_data(self):
+        # gera coluna de data e grava particionado
+        self.data = self.data.withColumn(
+            "fecha_procesamiento",
+            F.date_format(F.current_timestamp(), "yyyy-MM-dd")
+        )
+        dyf = DynamicFrame.fromDF(self.data, self.glue_context, "refined")
+        self.glue_context.write_dynamic_frame.from_options(
             frame              = dyf,
             connection_type    = "s3",
             connection_options = {
@@ -146,21 +161,21 @@ class RefinedPipeline:
             },
             format             = "parquet"
         )
+        logger.info("Dados refinados salvos em parquet particionado por data de processamento")
         return self
 
 def run_pipeline():
-    args  = getResolvedOptions(sys.argv, ['JOB_NAME'])
-    spark = SparkSession.builder.appName(args['JOB_NAME']).getOrCreate()
-    glue  = GlueContext(spark.sparkContext)
-    job   = Job(glue)
+    args       = getResolvedOptions(sys.argv, ['JOB_NAME'])
+    spark      = SparkSession.builder.appName(args['JOB_NAME']).getOrCreate()
+    glueContext= GlueContext(spark.sparkContext)
+    job        = Job(glueContext)
     job.init(args['JOB_NAME'], args)
 
-    (RefinedPipeline(glue)
-        .load_and_enrich()
-        .global_anomaly()
-        .train_and_assign_clusters()
-        .proxy_anomaly()
-        .save()
+    (RefinedPipeline(glueContext)
+        .load_latest_data()
+        .create_and_persist_sklearn_models()
+        .calculate_anomaly_proxies()
+        .save_refined_data()
     )
 
     job.commit()
