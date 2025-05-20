@@ -116,4 +116,12 @@ resource "aws_s3_object" "models_folder" {
   bucket = aws_s3_bucket.models.id
   key    = "models/"
   source = "/dev/null"
+}
+
+# Upload do script refined_to_models_03.py para o bucket de scripts Glue
+resource "aws_s3_object" "refined_to_models_script" {
+  bucket = aws_s3_bucket.scripts.id
+  key    = "glue/refined_to_models_03.py"
+  source = "${path.module}/scripts/glue/refined_to_models_03.py"
+  etag   = filemd5("${path.module}/scripts/glue/refined_to_models_03.py")
 } 
