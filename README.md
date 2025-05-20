@@ -1,3 +1,19 @@
+# Arquitectura del Proyecto
+
+Este proyecto implementa una solución integral de Data Lake y Machine Learning en AWS, abarcando desde la ingestión y versionamiento de datos hasta la exposición de modelos de inferencia vía API. La arquitectura está diseñada para ser escalable, reproducible y colaborativa, integrando las siguientes etapas:
+
+- **Versionamiento y almacenamiento de datos:** Utilizamos DVC junto con S3 para versionar y almacenar grandes volúmenes de datos y modelos, permitiendo colaboración y control de versiones eficiente.
+- **Procesamiento y transformación:** Los datos pasan por un pipeline orquestado con AWS Glue, que automatiza la limpieza, transformación y enriquecimiento de los datos en diferentes capas (raw, trusted, refined).
+- **Entrenamiento y gestión de modelos:** Los modelos de machine learning se entrenan automáticamente en jobs Glue, se versionan y se almacenan en S3, garantizando trazabilidad y reproducibilidad.
+- **Automatización y orquestación:** Scripts bash y Terraform automatizan la infraestructura, la ejecución de jobs y la catalogación de datos, asegurando que todo el flujo siga las mejores prácticas de DevOps y MLOps.
+- **Exposición de modelos vía API:** Una instancia EC2 hospeda una API FastAPI que permite consumir los modelos entrenados en tiempo real, facilitando la integración con herramientas como Power BI y otros sistemas externos.
+
+A continuación se muestra un diagrama general de la arquitectura:
+
+![Arquitectura del Proyecto](imagen/architectura.png)
+
+---
+
 # Versionamiento de Datos con DVC y S3
 
 Este proyecto utiliza [DVC (Data Version Control)](https://dvc.org/) para versionar archivos grandes y almacenarlos de manera eficiente en un bucket S3, evitando problemas con el límite de 100MB de GitHub.
@@ -113,4 +129,6 @@ Después de configurar las credenciales, podrá usar DVC para enviar y recuperar
 - Descargar datos de S3:
   ```bash
   dvc pull
-  ``` 
+  ```
+
+--- 
