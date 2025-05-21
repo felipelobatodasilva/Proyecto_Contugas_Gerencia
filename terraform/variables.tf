@@ -25,4 +25,10 @@ variable "app_port" {
   description = "Porta em que a aplicação FastAPI rodará"
   type        = number
   default     = 5000
+}
+
+variable "streamlit_port" {
+  description = "Porta em que a aplicação Streamlit rodará"
+  type        = number
+  default     = 8501
 } 

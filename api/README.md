@@ -131,6 +131,81 @@ Respuesta esperada:
 
 ---
 
-## 12. Contacto
+## 12. Implantación en EC2
 
-¿Dudas o problemas? Contacta al responsable del proyecto o abre un issue en el repositorio. 
+### 12.1 Transferencia de Archivos a la EC2
+
+Para mover los archivos a la EC2, usamos el comando `scp` desde nuestra máquina local:
+
+```bash
+# Desde el directorio del proyecto
+scp -i terraform/ssh/manual-ec2-key api/app.py ubuntu@3.90.233.16:/home/ubuntu/api/
+scp -i terraform/ssh/manual-ec2-key api/main.py ubuntu@3.90.233.16:/home/ubuntu/api/
+```
+
+### 12.2 Configuración en la EC2
+
+1. **Acceder a la EC2**:
+```bash
+ssh -i terraform/ssh/manual-ec2-key ubuntu@3.90.233.16
+```
+
+2. **Activar el ambiente virtual**:
+```bash
+cd ~/api
+source venv/bin/activate
+```
+
+3. **Instalar Streamlit**:
+```bash
+pip install streamlit
+```
+
+### 12.3 Ejecución de las Aplicaciones
+
+1. **FastAPI (ya en ejecución en screen)**:
+```bash
+# Ver screens activos
+screen -ls
+
+# Crear nuevo screen para FastAPI (si necesario)
+screen -S fastapi
+uvicorn main:app --host 0.0.0.0 --port 5000
+# Ctrl + A, D para salir del screen
+```
+
+2. **Streamlit**:
+```bash
+# Crear nuevo screen para Streamlit
+screen -S streamlit
+streamlit run app.py --server.port 8501 --server.address 0.0.0.0
+# Ctrl + A, D para salir del screen
+```
+
+### 12.4 Acceso a las Aplicaciones
+
+- **FastAPI**: `http://3.90.233.16:5000`
+- **Streamlit**: `http://3.90.233.16:8501`
+
+### 12.5 Gestión de Screens
+
+```bash
+# Listar screens activos
+screen -ls
+
+# Reconectar a un screen
+screen -r nombre_screen  # ejemplo: screen -r streamlit
+
+# Salir de un screen (manteniéndolo activo)
+# Presionar Ctrl + A, después D
+
+# Terminar un screen
+# Dentro del screen: Ctrl + C, después exit
+```
+
+### 12.6 Notas Importantes
+
+- Ambos servicios (FastAPI y Streamlit) deben estar ejecutándose simultáneamente
+- FastAPI corre en el puerto 5000 y Streamlit en el 8501
+- Los puertos 5000 y 8501 deben estar abiertos en el Security Group de la EC2
+- El ambiente virtual (venv) debe estar activado antes de ejecutar cualquier servicio

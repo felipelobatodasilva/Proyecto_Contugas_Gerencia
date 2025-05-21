@@ -27,6 +27,22 @@ resource "aws_security_group" "instance_sg" {
     ipv6_cidr_blocks = ["::/0"]
   }
 
+  ingress {
+    description = "Streamlit Port from IPv4"
+    from_port   = 8501
+    to_port     = 8501
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description      = "Streamlit Port from IPv6"
+    from_port        = 8501
+    to_port          = 8501
+    protocol         = "tcp"
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
