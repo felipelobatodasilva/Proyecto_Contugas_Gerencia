@@ -1,6 +1,0 @@
-outs:
-- md5: 86cefd09c3a3a8abb1df0d9a50e317e6.dir
-  size: 28018141
-  nfiles: 4
-  hash: md5
-  path: Parquet_Trusted_Files
