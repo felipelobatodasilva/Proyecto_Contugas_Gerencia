@@ -1,6 +1,0 @@
-outs:
-- md5: 8e100a3fddb87427f2fb1d6c3c3342d7.dir
-  size: 1894
-  nfiles: 2
-  hash: md5
-  path: modelos_kmeans5_dinamico_otimizado_viz_otim_sem_hist
