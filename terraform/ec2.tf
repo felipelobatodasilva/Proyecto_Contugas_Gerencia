@@ -68,11 +68,66 @@ resource "aws_key_pair" "app_key" {
   public_key = file("${path.module}/ssh/${var.aws_key_pair_name}.pub")
 }
 
+# IAM role para a EC2
+resource "aws_iam_role" "ec2_s3_access" {
+  name = "ec2_s3_access_role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+# Política para acesso ao S3
+resource "aws_iam_role_policy" "s3_access_policy" {
+  name = "s3_access_policy"
+  role = aws_iam_role.ec2_s3_access.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:ListBucket"
+        ]
+        Resource = [
+          aws_s3_bucket.raw.arn,
+          "${aws_s3_bucket.raw.arn}/*",
+          aws_s3_bucket.trusted.arn,
+          "${aws_s3_bucket.trusted.arn}/*",
+          aws_s3_bucket.refined.arn,
+          "${aws_s3_bucket.refined.arn}/*",
+          aws_s3_bucket.models.arn,
+          "${aws_s3_bucket.models.arn}/*"
+        ]
+      }
+    ]
+  })
+}
+
+# Instance profile para a EC2
+resource "aws_iam_instance_profile" "ec2_profile" {
+  name = "ec2_s3_profile"
+  role = aws_iam_role.ec2_s3_access.name
+}
+
 resource "aws_instance" "app_server" {
   ami           = "ami-084568db4383264d4" # Ubuntu Server 24.04 LTS (us-east-1)
   instance_type = var.instance_type
   key_name      = var.aws_key_pair_name
   vpc_security_group_ids = [aws_security_group.instance_sg.id]
+  iam_instance_profile = aws_iam_instance_profile.ec2_profile.name
 
   tags = {
     Name = "contugasapi" # Nombre de la instancia EC2 para identificar en AWS

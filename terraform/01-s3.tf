@@ -4,9 +4,97 @@ resource "aws_s3_bucket" "raw" {
   force_destroy = true
 }
 
+# Encryption for raw bucket
+resource "aws_s3_bucket_server_side_encryption_configuration" "raw" {
+  bucket = aws_s3_bucket.raw.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+# Block public access for raw bucket
+resource "aws_s3_bucket_public_access_block" "raw" {
+  bucket = aws_s3_bucket.raw.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# Enforce SSL/TLS for raw bucket
+resource "aws_s3_bucket_policy" "raw_ssl" {
+  bucket = aws_s3_bucket.raw.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "ForceSSLOnly"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "s3:*"
+        Resource = [
+          aws_s3_bucket.raw.arn,
+          "${aws_s3_bucket.raw.arn}/*"
+        ]
+        Condition = {
+          Bool = {
+            "aws:SecureTransport": "false"
+          }
+        }
+      }
+    ]
+  })
+}
+
 resource "aws_s3_bucket" "trusted" {
   bucket = "contugas-trusted-data-dev"
   force_destroy = true
+}
+
+# Encryption for trusted bucket
+resource "aws_s3_bucket_server_side_encryption_configuration" "trusted" {
+  bucket = aws_s3_bucket.trusted.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+# Block public access for trusted bucket
+resource "aws_s3_bucket_public_access_block" "trusted" {
+  bucket = aws_s3_bucket.trusted.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# Enforce SSL/TLS for trusted bucket
+resource "aws_s3_bucket_policy" "trusted_ssl" {
+  bucket = aws_s3_bucket.trusted.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "ForceSSLOnly"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "s3:*"
+        Resource = [
+          aws_s3_bucket.trusted.arn,
+          "${aws_s3_bucket.trusted.arn}/*"
+        ]
+        Condition = {
+          Bool = {
+            "aws:SecureTransport": "false"
+          }
+        }
+      }
+    ]
+  })
 }
 
 resource "aws_s3_bucket" "scripts" {
@@ -14,21 +102,195 @@ resource "aws_s3_bucket" "scripts" {
   force_destroy = true
 }
 
-resource "aws_s3_bucket" "refined" {
-  bucket = "contugas-refined-data-dev"
-  force_destroy = true 
+# Encryption for scripts bucket
+resource "aws_s3_bucket_server_side_encryption_configuration" "scripts" {
+  bucket = aws_s3_bucket.scripts.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
 }
 
-# Bucket para modelos
+# Block public access for scripts bucket
+resource "aws_s3_bucket_public_access_block" "scripts" {
+  bucket = aws_s3_bucket.scripts.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# Enforce SSL/TLS for scripts bucket
+resource "aws_s3_bucket_policy" "scripts_ssl" {
+  bucket = aws_s3_bucket.scripts.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "ForceSSLOnly"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "s3:*"
+        Resource = [
+          aws_s3_bucket.scripts.arn,
+          "${aws_s3_bucket.scripts.arn}/*"
+        ]
+        Condition = {
+          Bool = {
+            "aws:SecureTransport": "false"
+          }
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_s3_bucket" "refined" {
+  bucket = "contugas-refined-data-dev"
+  force_destroy = true
+}
+
+# Encryption for refined bucket
+resource "aws_s3_bucket_server_side_encryption_configuration" "refined" {
+  bucket = aws_s3_bucket.refined.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+# Block public access for refined bucket
+resource "aws_s3_bucket_public_access_block" "refined" {
+  bucket = aws_s3_bucket.refined.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# Enforce SSL/TLS for refined bucket
+resource "aws_s3_bucket_policy" "refined_ssl" {
+  bucket = aws_s3_bucket.refined.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "ForceSSLOnly"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "s3:*"
+        Resource = [
+          aws_s3_bucket.refined.arn,
+          "${aws_s3_bucket.refined.arn}/*"
+        ]
+        Condition = {
+          Bool = {
+            "aws:SecureTransport": "false"
+          }
+        }
+      }
+    ]
+  })
+}
+
 resource "aws_s3_bucket" "models" {
   bucket = "contugas-models-dev"
   force_destroy = true
 }
 
-# Bucket para resultados do Athena
+# Encryption for models bucket
+resource "aws_s3_bucket_server_side_encryption_configuration" "models" {
+  bucket = aws_s3_bucket.models.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+# Block public access for models bucket
+resource "aws_s3_bucket_public_access_block" "models" {
+  bucket = aws_s3_bucket.models.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# Enforce SSL/TLS for models bucket
+resource "aws_s3_bucket_policy" "models_ssl" {
+  bucket = aws_s3_bucket.models.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "ForceSSLOnly"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "s3:*"
+        Resource = [
+          aws_s3_bucket.models.arn,
+          "${aws_s3_bucket.models.arn}/*"
+        ]
+        Condition = {
+          Bool = {
+            "aws:SecureTransport": "false"
+          }
+        }
+      }
+    ]
+  })
+}
+
 resource "aws_s3_bucket" "athena_results" {
   bucket = "contugas-athena-results-dev"
   force_destroy = true
+}
+
+# Encryption for athena_results bucket
+resource "aws_s3_bucket_server_side_encryption_configuration" "athena_results" {
+  bucket = aws_s3_bucket.athena_results.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+# Block public access for athena_results bucket
+resource "aws_s3_bucket_public_access_block" "athena_results" {
+  bucket = aws_s3_bucket.athena_results.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# Enforce SSL/TLS for athena_results bucket
+resource "aws_s3_bucket_policy" "athena_results_ssl" {
+  bucket = aws_s3_bucket.athena_results.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "ForceSSLOnly"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "s3:*"
+        Resource = [
+          aws_s3_bucket.athena_results.arn,
+          "${aws_s3_bucket.athena_results.arn}/*"
+        ]
+        Condition = {
+          Bool = {
+            "aws:SecureTransport": "false"
+          }
+        }
+      }
+    ]
+  })
 }
 
 # Versionamento apenas para buckets de dados
